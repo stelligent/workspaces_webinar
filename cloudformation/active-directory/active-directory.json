@@ -1,0 +1,91 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+        "ADName": {
+            "Description": "AD Name e.g. corp.company.com",
+            "Type": "String",
+            "Default": "corp.company.com"
+        },
+        "ADAdminPassword": {
+            "Description": "AD Admin Password (8 to 64 characters with no 'admin', atleast 1 Uppercase, 1 symbol, 1 number and 1 Lowercase character)",
+            "Type": "String",
+            "Default": "Password1234!"
+        }
+    },
+    "Resources": {
+        "SUBNETA1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": "us-east-1a",
+                "VpcId": {
+                    "Ref": "VPCA"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cft-stack-${AWS::StackName}-subnet-1a"
+                        }
+                    }
+                ]
+            }
+        },
+        "SUBNETA2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": "us-east-1b",
+                "VpcId": {
+                    "Ref": "VPCA"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cft-stack-${AWS::StackName}-subnet-1b"
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCA": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cft-stack-${AWS::StackName}-vpc-a"
+                        }
+                    }
+                ]
+            }
+        },
+        "MicrosoftAD": {
+            "Type": "AWS::DirectoryService::MicrosoftAD",
+            "Properties": {
+                "Name": {
+                    "Ref": "ADName"
+                },
+                "Password": {
+                    "Ref": "ADAdminPassword"
+                },
+                "VpcSettings": {
+                    "SubnetIds": [
+                        {
+                            "Ref": "SUBNETA1"
+                        },
+                        {
+                            "Ref": "SUBNETA2"
+                        }
+                    ],
+                    "VpcId": {
+                        "Ref": "VPCA"
+                    }
+                }
+            }
+        }
+    }
+}
