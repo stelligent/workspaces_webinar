@@ -29,6 +29,11 @@
                         }
                     }
                 ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "ba5514b2-c22e-4ba5-be98-e911406ead3d"
+                }
             }
         },
         "SUBNETA2": {
@@ -47,6 +52,11 @@
                         }
                     }
                 ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "6ad6f13d-ebda-4122-84e5-f1a913390325"
+                }
             }
         },
         "VPCA": {
@@ -61,6 +71,115 @@
                         }
                     }
                 ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "d4038561-5e74-42f0-9a3d-992e0be494a1"
+                }
+            }
+        },
+        "ROUTEA": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "ROUTETABLEA1"
+                },
+                "GatewayId": {
+                    "Ref": "IGWA"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0"
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "59601266-653b-4c48-8cca-a12864aa9ba5"
+                }
+            }
+        },
+        "ROUTETABLEA1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPCA"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cft-stack-${AWS::StackName}-routetable-a1"
+                        }
+                    }
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "381e7d2f-e1f8-4708-990e-9466f4c50643"
+                }
+            }
+        },
+        "RTA1S1AAssoc": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "ROUTETABLEA1"
+                },
+                "SubnetId": {
+                    "Ref": "SUBNETA1"
+                }
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "c747c3bf-8ecb-4b85-9e9b-4fcad870f0f6"
+                }
+            }
+        },
+        "RTA1S1BAssoc": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "ROUTETABLEA1"
+                },
+                "SubnetId": {
+                    "Ref": "SUBNETA2"
+                }
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "9ffd96c1-39fa-4761-8405-9de737e0b1e8"
+                }
+            }
+        },
+        "IGWA": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cft-stack-${AWS::StackName}-igw-a"
+                        }
+                    }
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "af12df9b-814f-4f19-a8f9-821adf128582"
+                }
+            }
+        },
+        "VPCIGWAssoc": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "IGWA"
+                },
+                "VpcId": {
+                    "Ref": "VPCA"
+                }
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "ce72a834-ed3f-432b-89f9-871ecba91eb7"
+                }
             }
         },
         "MicrosoftAD": {
@@ -84,6 +203,353 @@
                     "VpcId": {
                         "Ref": "VPCA"
                     }
+                }
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "38a014bc-6b7c-4d39-ab20-44803d46c418"
+                }
+            }
+        },
+        "SGA1": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cft-stack-${AWS::StackName}-securitygroup-a1"
+                        }
+                    }
+                ],
+                "GroupDescription": "This is the default security group for VPCAs public subnets",
+                "GroupName": "SGA1",
+                "VpcId": {
+                    "Ref": "VPCA"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3389,
+                        "ToPort": 3389,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "icmp",
+                        "FromPort": "-1",
+                        "ToPort": "-1",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "-1",
+                        "FromPort": 0,
+                        "ToPort": 65535,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "icmp",
+                        "FromPort": "-1",
+                        "ToPort": "-1",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "1840b849-e492-4239-a06b-a6b477b2cbb3"
+                }
+            }
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Designer": {
+            "af12df9b-814f-4f19-a8f9-821adf128582": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 420,
+                    "y": 750
+                },
+                "z": 1,
+                "embeds": []
+            },
+            "d4038561-5e74-42f0-9a3d-992e0be494a1": {
+                "size": {
+                    "width": 690,
+                    "height": 600
+                },
+                "position": {
+                    "x": 60,
+                    "y": 90
+                },
+                "z": 1,
+                "embeds": [
+                    "1840b849-e492-4239-a06b-a6b477b2cbb3",
+                    "381e7d2f-e1f8-4708-990e-9466f4c50643",
+                    "6ad6f13d-ebda-4122-84e5-f1a913390325",
+                    "ba5514b2-c22e-4ba5-be98-e911406ead3d"
+                ]
+            },
+            "ce72a834-ed3f-432b-89f9-871ecba91eb7": {
+                "source": {
+                    "id": "d4038561-5e74-42f0-9a3d-992e0be494a1"
+                },
+                "target": {
+                    "id": "af12df9b-814f-4f19-a8f9-821adf128582"
+                },
+                "z": 1
+            },
+            "381e7d2f-e1f8-4708-990e-9466f4c50643": {
+                "size": {
+                    "width": 240,
+                    "height": 240
+                },
+                "position": {
+                    "x": 390,
+                    "y": 150
+                },
+                "z": 2,
+                "parent": "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                "embeds": [
+                    "59601266-653b-4c48-8cca-a12864aa9ba5"
+                ],
+                "iscontainedinside": [
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1"
+                ]
+            },
+            "59601266-653b-4c48-8cca-a12864aa9ba5": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 420,
+                    "y": 180
+                },
+                "z": 3,
+                "parent": "381e7d2f-e1f8-4708-990e-9466f4c50643",
+                "embeds": [],
+                "isassociatedwith": [
+                    "af12df9b-814f-4f19-a8f9-821adf128582"
+                ],
+                "iscontainedinside": [
+                    "381e7d2f-e1f8-4708-990e-9466f4c50643",
+                    "381e7d2f-e1f8-4708-990e-9466f4c50643",
+                    "381e7d2f-e1f8-4708-990e-9466f4c50643",
+                    "381e7d2f-e1f8-4708-990e-9466f4c50643",
+                    "381e7d2f-e1f8-4708-990e-9466f4c50643",
+                    "381e7d2f-e1f8-4708-990e-9466f4c50643"
+                ]
+            },
+            "6ad6f13d-ebda-4122-84e5-f1a913390325": {
+                "size": {
+                    "width": 150,
+                    "height": 150
+                },
+                "position": {
+                    "x": 90,
+                    "y": 450
+                },
+                "z": 2,
+                "parent": "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                "embeds": [],
+                "iscontainedinside": [
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1"
+                ]
+            },
+            "9ffd96c1-39fa-4761-8405-9de737e0b1e8": {
+                "source": {
+                    "id": "381e7d2f-e1f8-4708-990e-9466f4c50643"
+                },
+                "target": {
+                    "id": "6ad6f13d-ebda-4122-84e5-f1a913390325"
+                },
+                "z": 2
+            },
+            "ba5514b2-c22e-4ba5-be98-e911406ead3d": {
+                "size": {
+                    "width": 240,
+                    "height": 240
+                },
+                "position": {
+                    "x": 90,
+                    "y": 150
+                },
+                "z": 2,
+                "parent": "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                "embeds": [],
+                "iscontainedinside": [
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1"
+                ]
+            },
+            "38a014bc-6b7c-4d39-ab20-44803d46c418": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 540,
+                    "y": 750
+                },
+                "z": 1,
+                "embeds": []
+            },
+            "c747c3bf-8ecb-4b85-9e9b-4fcad870f0f6": {
+                "source": {
+                    "id": "381e7d2f-e1f8-4708-990e-9466f4c50643"
+                },
+                "target": {
+                    "id": "ba5514b2-c22e-4ba5-be98-e911406ead3d"
+                },
+                "z": 2
+            },
+            "1840b849-e492-4239-a06b-a6b477b2cbb3": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 270,
+                    "y": 420
+                },
+                "z": 2,
+                "parent": "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                "embeds": [],
+                "iscontainedinside": [
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1",
+                    "d4038561-5e74-42f0-9a3d-992e0be494a1"
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCAId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPCA"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPCID"
+                }
+            }
+        },
+        "SUBNETA1Id": {
+            "Description": "The subnet ID used",
+            "Value": {
+                "Ref": "SUBNETA1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SubnetID"
+                }
+            }
+        },
+        "SGA1Id": {
+            "Description": "The security group ID used",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SGA1",
+                    "GroupId"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecurityGroupID"
+                }
+            }
+        },
+        "ADId": {
+            "Description": "The AD ID used",
+            "Value": {
+                "Ref": "MicrosoftAD"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MicrosoftADID"
+                }
+            }
+        },
+        "ADName": {
+            "Description": "The AD Name used",
+            "Value": {
+                "Ref": "ADName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MicrosoftADName"
+                }
+            }
+        },
+        "ADDNSIP1": {
+            "Description": "The DNS IPs used",
+            "Value": {
+                "Fn::Select": [
+                    "0",
+                    {
+                        "Fn::GetAtt": [
+                            "MicrosoftAD",
+                            "DnsIpAddresses"
+                        ]
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DnsIpAddress1"
+                }
+            }
+        },
+        "ADDNSIP2": {
+            "Description": "The DNS IPs used",
+            "Value": {
+                "Fn::Select": [
+                    "1",
+                    {
+                        "Fn::GetAtt": [
+                            "MicrosoftAD",
+                            "DnsIpAddresses"
+                        ]
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DnsIpAddress2"
                 }
             }
         }
