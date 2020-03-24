@@ -1,0 +1,524 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+        "ADStackName": {
+            "Description": "StackName of MicrosoftAD",
+            "Type": "String",
+            "Default": ""
+        }
+    },
+    "Resources": {
+        "EC2A": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": "ami-09d496c26aa745869",
+                "InstanceType": "t2.large",
+                "IamInstanceProfile": {
+                    "Ref": "EC2AINSTANCEPROFILE"
+                },
+                "SsmAssociations": [
+                    {
+                        "DocumentName": {
+                            "Ref": "SSMdocument"
+                        },
+                        "AssociationParameters": [
+                            {
+                                "Key": "directoryId",
+                                "Value": [
+                                    {
+                                        "Fn::ImportValue": {
+                                            "Fn::Sub": "${ADStackName}-MicrosoftADID"
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "Key": "directoryName",
+                                "Value": [
+                                    {
+                                        "Fn::ImportValue": {
+                                            "Fn::Sub": "${ADStackName}-MicrosoftADName"
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "Key": "dnsIpAddresses",
+                                "Value": [
+                                    {
+                                        "Fn::ImportValue": {
+                                            "Fn::Sub": "${ADStackName}-DnsIpAddress1"
+                                        }
+                                    },
+                                    {
+                                        "Fn::ImportValue": {
+                                            "Fn::Sub": "${ADStackName}-DnsIpAddress2"
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "KeyName": {
+                    "Ref": "AWS::StackName"
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "<powershell>\n",
+                                "Install-WindowsFeature -Name GPMC,RSAT-AD-PowerShell,RSAT-AD-AdminCenter,RSAT-ADDS-Tools,RSAT-DNS-Server\n",
+                                "New-ADUser -Name \"testuser3\" -GivenName \"Anoop3\" -Surname \"Tester3\" -SamAccountName \"testuser3\" -UserPrincipalName \"madhavanscrum3@gmail.com\"   -Enabled $true -ChangePasswordAtLogon $false  -AccountPassword (ConvertTo-SecureString \"Password1234!\" -AsPlainText -force) -passThru\n",
+                                "Add-ADGroupMember -Identity \"AWS Delegated Administrators\" -Members \"testuser3\"\n",
+                                "</powershell>\n",
+                                "<persist>true</persist>\n"
+                            ]
+                        ]
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cft-stack-${AWS::StackName}-ec2-windows"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "This is a Windows server attached to the managed Microsoft AD"
+                    }
+                ],
+                "NetworkInterfaces": [
+                    {
+                        "DeviceIndex": "0",
+                        "AssociatePublicIpAddress": "true",
+                        "GroupSet": [
+                            {
+                                "Fn::ImportValue": {
+                                    "Fn::Sub": "${ADStackName}-SecurityGroupID"
+                                }
+                            }
+                        ],
+                        "SubnetId": {
+                            "Fn::ImportValue": {
+                                "Fn::Sub": "${ADStackName}-SubnetID"
+                            }
+                        }
+                    }
+                ]
+            },
+            "DependsOn": [
+                "LambdaInvoke",
+                "EC2AINSTANCEPROFILE"
+            ],
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "cb1b6cd0-54bd-474d-8f4a-9b6fb56c2ba6"
+                }
+            }
+        },
+        "ROLEEC2AAD": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "ec2ssmpolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "ds:*",
+                                        "ssm:*"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "d717cb61-9a68-487a-a014-2929dc026d75"
+                }
+            }
+        },
+        "SSMdocument": {
+            "Type": "AWS::SSM::Document",
+            "Properties": {
+                "Content": {
+                    "schemaVersion": "1.2",
+                    "description": "Join instances to an AWS Directory Service domain.",
+                    "parameters": {
+                        "directoryId": {
+                            "type": "String",
+                            "description": "(Required) The ID of the AWS Directory Service directory."
+                        },
+                        "directoryName": {
+                            "type": "String",
+                            "description": "(Required) The name of the directory; for example, test.example.com"
+                        },
+                        "dnsIpAddresses": {
+                            "type": "StringList",
+                            "default": [],
+                            "description": "(Optional) The IP addresses of the DNS servers in the directory. Required when DHCP is not configured. Learn more at http://docs.aws.amazon.com/directoryservice/latest/simple-ad/join_get_dns_addresses.html",
+                            "allowedPattern": "((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"
+                        },
+                        "commands": {
+                            "type": "StringList",
+                            "description": "(Required) Specify the commands to run or the paths to existing scripts on the instance.",
+                            "minItems": 1,
+                            "displayType": "textarea",
+                            "default": [
+                                "New-ADUser -Name \"testuser3\" -GivenName \"Anoop3\" -Surname \"Tester3\" -SamAccountName \"testuser3\" -UserPrincipalName \"madhavanscrum3@gmail.com\"   -Enabled $true -ChangePasswordAtLogon $false  -AccountPassword (ConvertTo-SecureString \"Password1234!\" -AsPlainText -force) -passThru",
+                                "Add-ADGroupMember -Identity \"AWS Delegated Administrators\" -Members \"testuser3\""
+                            ]
+                        },
+                        "workingDirectory": {
+                            "type": "String",
+                            "default": "",
+                            "description": "(Optional) The path to the working directory on your instance.",
+                            "maxChars": 4096
+                        },
+                        "executionTimeout": {
+                            "type": "String",
+                            "default": "3600",
+                            "description": "(Optional) The time in seconds for a command to be completed before it is considered to have failed. Default is 3600 (1 hour). Maximum is 172800 (48 hours).",
+                            "allowedPattern": "([1-9][0-9]{0,4})|(1[0-6][0-9]{4})|(17[0-1][0-9]{3})|(172[0-7][0-9]{2})|(172800)"
+                        }
+                    },
+                    "runtimeConfig": {
+                        "aws:domainJoin": {
+                            "properties": {
+                                "id": "0",
+                                "directoryId": "{{ directoryId }}",
+                                "directoryName": "{{ directoryName }}",
+                                "dnsIpAddresses": "{{ dnsIpAddresses }}"
+                            }
+                        },
+                        "aws:runPowerShellScript": {
+                            "properties": [
+                                {
+                                    "id": "1",
+                                    "runCommand": "{{ commands }}",
+                                    "workingDirectory": "{{ workingDirectory }}",
+                                    "timeoutSeconds": "{{ executionTimeout }}"
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "c39b3152-db93-453b-bda2-23a9a0d72917"
+                }
+            }
+        },
+        "SSMdocument1": {
+            "Type": "AWS::SSM::Document",
+            "Properties": {
+                "Content": {
+                    "schemaVersion": "1.2",
+                    "description": "Run a PowerShell script or specify the paths to scripts to run.",
+                    "parameters": {
+                        "commands": {
+                            "type": "StringList",
+                            "description": "(Required) Specify the commands to run or the paths to existing scripts on the instance.",
+                            "minItems": 1,
+                            "displayType": "textarea",
+                            "default": [
+                                "New-ADUser -Name \"testuser2\" -GivenName \"Anoop1\" -Surname \"Tester1\" -SamAccountName \"testuser2\" -UserPrincipalName \"madhavanscrum2@gmail.com\"   -Enabled $true -ChangePasswordAtLogon $false  -AccountPassword (ConvertTo-SecureString \"Password1234!\" -AsPlainText -force) -passThru",
+                                "Add-ADGroupMember -Identity \"AWS Delegated Administrator\" -Members \"testuser2\""
+                            ]
+                        },
+                        "workingDirectory": {
+                            "type": "String",
+                            "default": "",
+                            "description": "(Optional) The path to the working directory on your instance.",
+                            "maxChars": 4096
+                        },
+                        "executionTimeout": {
+                            "type": "String",
+                            "default": "3600",
+                            "description": "(Optional) The time in seconds for a command to be completed before it is considered to have failed. Default is 3600 (1 hour). Maximum is 172800 (48 hours).",
+                            "allowedPattern": "([1-9][0-9]{0,4})|(1[0-6][0-9]{4})|(17[0-1][0-9]{3})|(172[0-7][0-9]{2})|(172800)"
+                        }
+                    },
+                    "runtimeConfig": {
+                        "aws:runPowerShellScript": {
+                            "properties": [
+                                {
+                                    "id": "0.aws:runPowerShellScript",
+                                    "runCommand": "{{ commands }}",
+                                    "workingDirectory": "{{ workingDirectory }}",
+                                    "timeoutSeconds": "{{ executionTimeout }}"
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "2791a932-e18f-4d6e-bd93-d6af27043902"
+                }
+            }
+        },
+        "EC2AINSTANCEPROFILE": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "ROLEEC2AAD"
+                    }
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "b6c50b5c-27e1-4d95-a840-f7d59dd4e3a7"
+                }
+            }
+        },
+        "KeyPairLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python2.7",
+                "Description": "Test with Cloud Formation",
+                "FunctionName": {
+                    "Ref": "AWS::StackName"
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport logging\nimport signal\nimport boto3\n\nfrom urllib2 import build_opener, HTTPHandler, Request\n\ns3 = boto3.resource('s3')\ns3client = boto3.client('s3')\nec2 = boto3.client('ec2')\n\nLOGGER = logging.getLogger()\nLOGGER.setLevel(logging.INFO)\n\n\ndef lambda_handler(event, context):\n    keypairname = event['ResourceProperties']['KeyPairName']\n    accountid = boto3.client('sts').get_caller_identity()['Account']\n    bucket = accountid+\"-\"+keypairname\n    key = keypairname + \".pem\"\n    print key\n\n    try:\n        LOGGER.info('REQUEST RECEIVED:\\n %s', event)\n        LOGGER.info('REQUEST RECEIVED:\\n %s', context)\n        if event['RequestType'] == 'Create':\n            LOGGER.info('CREATE!')\n            response = ec2.create_key_pair(KeyName=keypairname)\n            keymaterial = response['KeyMaterial']\n            s3.create_bucket(Bucket=bucket)\n            s3client.put_bucket_encryption(Bucket=bucket, ServerSideEncryptionConfiguration={'Rules': [{ 'ApplyServerSideEncryptionByDefault': { 'SSEAlgorithm': 'aws:kms' }}]})\n            object = s3.Object(bucket, key)\n            object.put(Body=keymaterial)\n            send_response(event, context, \"SUCCESS\",\n                          {\"Message\": \"Resource creation successful!\"})\n        elif event['RequestType'] == 'Update':\n            LOGGER.info('UPDATE!')\n            send_response(event, context, \"SUCCESS\",\n                          {\"Message\": \"Resource update successful!\"})\n        elif event['RequestType'] == 'Delete':\n            LOGGER.info('DELETE!')\n            response = ec2.delete_key_pair(KeyName=keypairname)\n            object = s3.Object(bucket, key)\n            object.delete()\n            objectb = s3.Bucket(bucket)\n            objectb.delete()\n            send_response(event, context, \"SUCCESS\",\n                          {\"Message\": \"Resource deletion successful!\"})\n        else:\n            LOGGER.info('FAILED!')\n            send_response(event, context, \"FAILED\",\n                          {\"Message\": \"Unexpected event received from CloudFormation\"})\n    except: #pylint: disable=W0702\n        LOGGER.info('FAILED!')\n        send_response(event, context, \"FAILED\", {\n            \"Message\": \"Exception during processing\"})\n\n\ndef send_response(event, context, response_status, response_data):\n    '''Send a resource manipulation status response to CloudFormation'''\n    response_body = json.dumps({\n        \"Status\": response_status,\n        \"Reason\": \"See the details in CloudWatch Log Stream: \" + context.log_stream_name,\n        \"PhysicalResourceId\": context.log_stream_name,\n        \"StackId\": event['StackId'],\n        \"RequestId\": event['RequestId'],\n        \"LogicalResourceId\": event['LogicalResourceId'],\n        \"Data\": response_data\n    })\n\n    LOGGER.info('ResponseURL: %s', event['ResponseURL'])\n    LOGGER.info('ResponseBody: %s', response_body)\n\n    opener = build_opener(HTTPHandler)\n    request = Request(event['ResponseURL'], data=response_body)\n    request.add_header('Content-Type', '')\n    request.add_header('Content-Length', len(response_body))\n    request.get_method = lambda: 'PUT'\n    response = opener.open(request)\n    LOGGER.info(\"Status code: %s\", response.getcode())\n    LOGGER.info(\"Status message: %s\", response.msg)\n    "
+                }
+            },
+            "DependsOn": [
+                "LambdaRole"
+            ],
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "d2643a55-3b21-4553-8cba-cbd3177bc113"
+                }
+            }
+        },
+        "LambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "lambdas3",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "logs:CreateLogGroup",
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "s3:*",
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "ec2:*",
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "fb450468-5684-4986-93f5-249f25fd5389"
+                }
+            }
+        },
+        "LambdaInvoke": {
+            "Type": "Custom::Invoker",
+            "Properties": {
+                "Description": "This is how you invoke the Lambda",
+                "ServiceToken": {
+                    "Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}"
+                },
+                "KeyPairName": {
+                    "Ref": "AWS::StackName"
+                }
+            },
+            "DependsOn": [
+                "KeyPairLambda"
+            ],
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "97e2d5d6-dedc-4406-9620-6a6e0b6664f4"
+                }
+            }
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Designer": {
+            "fb450468-5684-4986-93f5-249f25fd5389": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 60,
+                    "y": 90
+                },
+                "z": 1,
+                "embeds": []
+            },
+            "d2643a55-3b21-4553-8cba-cbd3177bc113": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 180,
+                    "y": 90
+                },
+                "z": 1,
+                "embeds": []
+            },
+            "97e2d5d6-dedc-4406-9620-6a6e0b6664f4": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 60,
+                    "y": 210
+                },
+                "z": 1,
+                "embeds": [],
+                "dependson": [
+                    "d2643a55-3b21-4553-8cba-cbd3177bc113"
+                ]
+            },
+            "d717cb61-9a68-487a-a014-2929dc026d75": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 180,
+                    "y": 210
+                },
+                "z": 1,
+                "embeds": []
+            },
+            "b6c50b5c-27e1-4d95-a840-f7d59dd4e3a7": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 300,
+                    "y": 90
+                },
+                "z": 1,
+                "embeds": [],
+                "isassociatedwith": [
+                    "d717cb61-9a68-487a-a014-2929dc026d75"
+                ]
+            },
+            "cb1b6cd0-54bd-474d-8f4a-9b6fb56c2ba6": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 300,
+                    "y": 210
+                },
+                "z": 1,
+                "embeds": [],
+                "dependson": [
+                    "97e2d5d6-dedc-4406-9620-6a6e0b6664f4"
+                ]
+            },
+            "c39b3152-db93-453b-bda2-23a9a0d72917": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 120,
+                    "y": 300
+                },
+                "z": 1,
+                "embeds": []
+            },
+            "2791a932-e18f-4d6e-bd93-d6af27043902": {
+                "size": {
+                    "width": 60,
+                    "height": 60
+                },
+                "position": {
+                    "x": 210,
+                    "y": 300
+                },
+                "z": 1,
+                "embeds": []
+            }
+        }
+    }
+}
