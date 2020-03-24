@@ -70,10 +70,8 @@
                             [
                                 "<powershell>\n",
                                 "Install-WindowsFeature -Name GPMC,RSAT-AD-PowerShell,RSAT-AD-AdminCenter,RSAT-ADDS-Tools,RSAT-DNS-Server\n",
-                                "New-ADUser -Name \"testuser3\" -GivenName \"Anoop3\" -Surname \"Tester3\" -SamAccountName \"testuser3\" -UserPrincipalName \"madhavanscrum3@gmail.com\"   -Enabled $true -ChangePasswordAtLogon $false  -AccountPassword (ConvertTo-SecureString \"Password1234!\" -AsPlainText -force) -passThru\n",
-                                "Add-ADGroupMember -Identity \"AWS Delegated Administrators\" -Members \"testuser3\"\n",
-                                "</powershell>\n",
-                                "<persist>true</persist>\n"
+                                "New-AdUser -Name Test\n",
+                                "</powershell>\n"
                             ]
                         ]
                     }
@@ -187,8 +185,8 @@
                             "minItems": 1,
                             "displayType": "textarea",
                             "default": [
-                                "New-ADUser -Name \"testuser3\" -GivenName \"Anoop3\" -Surname \"Tester3\" -SamAccountName \"testuser3\" -UserPrincipalName \"madhavanscrum3@gmail.com\"   -Enabled $true -ChangePasswordAtLogon $false  -AccountPassword (ConvertTo-SecureString \"Password1234!\" -AsPlainText -force) -passThru",
-                                "Add-ADGroupMember -Identity \"AWS Delegated Administrators\" -Members \"testuser3\""
+                                "New-ADUser -Name \"testuser\" -GivenName \"Anoop\" -Surname \"Tester\" -SamAccountName \"testuser\" -UserPrincipalName \"tester@corp.company.com\"   -Enabled $true -ChangePasswordAtLogon $false  -AccountPassword (ConvertTo-SecureString \"Password1234!\" -AsPlainText -force) -passThru\n",
+                                "Add-ADGroupMember -Identity \"AWS Delegated Administrators\" -Members \"testuser\"\n"
                             ]
                         },
                         "workingDirectory": {
