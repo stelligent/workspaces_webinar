@@ -37,8 +37,9 @@ Parameters:
     Type: String
     Default: Password1234!
   IspIpAddress:
-    Description: The ISP IP Address of your machine to use for RDP "Google 'what is my ip address'.  Format: x.x.0.0"
+    Description: The ISP IP Address of your machine to use for RDP - Google what is my ip address.
     Type: String
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -242,6 +243,7 @@ Resources:
           - !Ref PrivateSubnet2
         VpcId: !Ref VPC
 
+  # SMB access for file share added in workspace-vpc.yaml
   SGA1:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -255,15 +257,15 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: !Sub '${IspIpAddress}/16'
+          CidrIp: !Sub '${IspIpAddress}/32'
         - IpProtocol: tcp
           FromPort: 3389
           ToPort: 3389
-          CidrIp: !Sub '${IspIpAddress}/16'
+          CidrIp: !Sub '${IspIpAddress}/32'
         - IpProtocol: icmp
           FromPort: '-1'
           ToPort: '-1'
-          CidrIp: !Sub '${IspIpAddress}/16'
+          CidrIp: !Sub '${IspIpAddress}/32'
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 80
@@ -304,14 +306,6 @@ Resources:
             - >
               Install-WindowsFeature -Name
               GPMC,RSAT-AD-PowerShell,RSAT-AD-AdminCenter,RSAT-ADDS-Tools,RSAT-DNS-Server
-            - >
-              New-ADUser -Name "saucoin1" -GivenName "Shawn" -Surname
-              "Aucoin" -SamAccountName "saucoin1" -UserPrincipalName
-              "saucoin1@corp.company.com" -AccountPassword (ConvertTo-SecureString "Password1234!"
-              -AsPlainText -force) -passThru -Email "saucoin@corp.company.com"
-            - >
-              Add-ADGroupMember -Identity "AWS Delegated Administrators"
-              -Members "saucoin1"
             - |
               </powershell>
             - |
@@ -386,13 +380,7 @@ Resources:
             displayType: textarea
             default:
               - >
-                New-ADUser -Name "saucoin2" -GivenName "Shawn" -Surname
-                "Aucoin" -SamAccountName "saucoin2" -UserPrincipalName
-                "saucoin2@corp.company.com -AccountPassword (ConvertTo-SecureString "Password1234!"
-                -AsPlainText -force) -passThru -Email "saucoin@corp.company.com"
-              - >
-                Add-ADGroupMember -Identity "AWS Delegated Administrators"
-                -Members "saucoin2"
+                echo "Maybe add users here?"
           workingDirectory:
             type: String
             default: ''
