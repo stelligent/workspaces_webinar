@@ -16,6 +16,8 @@ Mappings:
       PrivateSubnet2CIDR: 10.196.21.0/24
       AZ1: us-east-1c
       AZ2: us-east-1d
+      WAMPackagerAMI: ami-028c9f9e786e1c715
+      WAMValidatorAMI: ami-060786b20c7a90b3f
     us-west-2:
       EnvironmentName: WorkspaceInfrastructure
       VpcCIDR: 10.198.0.0/16
@@ -31,6 +33,18 @@ Parameters:
     Type: String
     Description: The stack name where the Microsoft AD resides
     Default: corp-vpc-ad-sga
+  ConfigureWAM:
+    Type: String
+    Description: Flag to spin up two EC2 instances for WAM packaging and validation
+    Default: 'false'
+  IspIpAddress:
+    Description: The ISP IP Address of your machine to use for RDP - Google what is my ip address.
+    Type: String
+    # AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})
+    Default: ''
+
+Conditions:
+  ConfigureWAM: !Equals [ !Ref ConfigureWAM, true ]
 
 Resources:
 
@@ -325,6 +339,264 @@ Resources:
       GroupName: "no-ingress-sg"
       GroupDescription: "Security group with no ingress rule"
       VpcId: !Ref VPC
+
+  SGA1:
+    Type: 'AWS::EC2::SecurityGroup'
+    Condition: ConfigureWAM
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'cft-stack-${AWS::StackName}-securitygroup-a1'
+      GroupDescription: This is the default security group for VPCAs public subnets
+      GroupName: SGA1
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Sub '${IspIpAddress}/32'
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: !Sub '${IspIpAddress}/32'
+        - IpProtocol: icmp
+          FromPort: '-1'
+          ToPort: '-1'
+          CidrIp: !Sub '${IspIpAddress}/32'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: '-1'
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort: '-1'
+          ToPort: '-1'
+          CidrIp: 0.0.0.0/0
+
+  WAMPackagerEC2:
+    Type: 'AWS::EC2::Instance'
+    Condition: ConfigureWAM
+    Properties:
+      ImageId: !FindInMap [ RegionSettings, !Ref 'AWS::Region', WAMPackagerAMI]
+      InstanceType: m5.xlarge
+      IamInstanceProfile: !Ref EC2AINSTANCEPROFILE
+      KeyName: !Ref 'AWS::StackName'
+      Tags:
+        - Key: Name
+          Value: !Sub 'cft-stack-${AWS::StackName}-wampackager-ec2-windows'
+        - Key: Purpose
+          Value: This is a Windows server hosting the AWS Workspaces Application Manager (WAM) Packager
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          AssociatePublicIpAddress: 'true'
+          GroupSet:
+            - !Ref SGA1
+          SubnetId: !Ref PublicSubnet1
+    DependsOn:
+      - LambdaInvoke
+      - EC2AINSTANCEPROFILE
+
+  WAMValidatorEC2:
+    Type: 'AWS::EC2::Instance'
+    Condition: ConfigureWAM
+    Properties:
+      ImageId: !FindInMap [ RegionSettings, !Ref 'AWS::Region', WAMValidatorAMI]
+      InstanceType: m3.xlarge
+      IamInstanceProfile: !Ref EC2AINSTANCEPROFILE
+      KeyName: !Ref 'AWS::StackName'
+      Tags:
+        - Key: Name
+          Value: !Sub 'cft-stack-${AWS::StackName}-wamvalidator-ec2-windows'
+        - Key: Purpose
+          Value: This is a Windows server hosting the AWS Workspaces Application Manager (WAM) Validator
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          AssociatePublicIpAddress: 'true'
+          GroupSet:
+            - !Ref SGA1
+          SubnetId: !Ref PublicSubnet1
+    DependsOn:
+      - LambdaInvoke
+      - EC2AINSTANCEPROFILE
+
+  WAMRole:
+    Type: AWS::IAM::Role
+    Condition: ConfigureWAM
+    Properties:
+      RoleName: AmazonWamAppPackaging
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonWorkSpacesApplicationManagerAdminAccess
+
+  EC2AINSTANCEPROFILE:
+    Type: 'AWS::IAM::InstanceProfile'
+    Condition: ConfigureWAM
+    Properties:
+      Roles:
+        - !Ref WAMRole
+
+  KeyPairLambda:
+    Type: 'AWS::Lambda::Function'
+    Condition: ConfigureWAM
+    Properties:
+      Handler: index.lambda_handler
+      Role: !GetAtt
+        - LambdaRole
+        - Arn
+      Runtime: python2.7
+      Description: Test with Cloud Formation
+      FunctionName: !Ref 'AWS::StackName'
+      Timeout: 60
+      Code:
+        ZipFile: |-
+          import json
+          import logging
+          import signal
+          import boto3
+          import os
+
+          from urllib2 import build_opener, HTTPHandler, Request
+
+          s3 = boto3.resource('s3')
+          s3client = boto3.client('s3')
+          ec2 = boto3.client('ec2')
+
+          LOGGER = logging.getLogger()
+          LOGGER.setLevel(logging.INFO)
+
+
+          def lambda_handler(event, context):
+              keypairname = event['ResourceProperties']['KeyPairName']
+              accountid = boto3.client('sts').get_caller_identity()['Account']
+              region = os.environ['AWS_REGION']
+              bucket = accountid+"-"+keypairname+"-"+region
+              key = keypairname + ".pem"
+              print key
+
+              try:
+                  LOGGER.info('REQUEST RECEIVED:\n %s', event)
+                  LOGGER.info('REQUEST RECEIVED:\n %s', context)
+                  if event['RequestType'] == 'Create':
+                      LOGGER.info('CREATE!')
+                      response = ec2.create_key_pair(KeyName=keypairname)
+                      keymaterial = response['KeyMaterial']
+                      if region == 'us-east-1':
+                        s3.create_bucket(Bucket=bucket)
+                      else:
+                        s3.create_bucket(Bucket=bucket, CreateBucketConfiguration={'LocationConstraint': region})
+
+                      s3client.put_bucket_encryption(Bucket=bucket, ServerSideEncryptionConfiguration={'Rules': [{ 'ApplyServerSideEncryptionByDefault': { 'SSEAlgorithm': 'aws:kms' }}]})
+                      object = s3.Object(bucket, key)
+                      object.put(Body=keymaterial)
+                      send_response(event, context, "SUCCESS",
+                                    {"Message": "Resource creation successful!"})
+                  elif event['RequestType'] == 'Update':
+                      LOGGER.info('UPDATE!')
+                      send_response(event, context, "SUCCESS",
+                                    {"Message": "Resource update successful!"})
+                  elif event['RequestType'] == 'Delete':
+                      LOGGER.info('DELETE!')
+                      response = ec2.delete_key_pair(KeyName=keypairname)
+                      object = s3.Object(bucket, key)
+                      object.delete()
+                      objectb = s3.Bucket(bucket)
+                      objectb.delete()
+                      send_response(event, context, "SUCCESS",
+                                    {"Message": "Resource deletion successful!"})
+                  else:
+                      LOGGER.info('FAILED!')
+                      send_response(event, context, "FAILED",
+                                    {"Message": "Unexpected event received from CloudFormation"})
+              except Exception as e: #pylint: disable=W0702
+                  LOGGER.info('FAILED!')
+                  send_response(event, context, "FAILED", {
+                      "Message": str(e)})
+
+
+          def send_response(event, context, response_status, response_data):
+              '''Send a resource manipulation status response to CloudFormation'''
+              response_body = json.dumps({
+                  "Status": response_status,
+                  "Reason": "See the details in CloudWatch Log Stream: " + context.log_stream_name,
+                  "PhysicalResourceId": context.log_stream_name,
+                  "StackId": event['StackId'],
+                  "RequestId": event['RequestId'],
+                  "LogicalResourceId": event['LogicalResourceId'],
+                  "Data": response_data
+              })
+
+              LOGGER.info('ResponseURL: %s', event['ResponseURL'])
+              LOGGER.info('ResponseBody: %s', response_body)
+
+              opener = build_opener(HTTPHandler)
+              request = Request(event['ResponseURL'], data=response_body)
+              request.add_header('Content-Type', '')
+              request.add_header('Content-Length', len(response_body))
+              request.get_method = lambda: 'PUT'
+              response = opener.open(request)
+              LOGGER.info("Status code: %s", response.getcode())
+              LOGGER.info("Status message: %s", response.msg)
+
+    DependsOn:
+      - LambdaRole
+
+  LambdaRole:
+    Type: 'AWS::IAM::Role'
+    Condition: ConfigureWAM
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: lambdas3
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 'logs:CreateLogGroup'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+              - Effect: Allow
+                Action: 's3:*'
+                Resource: '*'
+              - Effect: Allow
+                Action: 'ec2:*'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+
+
+  LambdaInvoke:
+    Type: 'Custom::Invoker'
+    Condition: ConfigureWAM
+    Properties:
+      Description: This is how you invoke the Lambda
+      ServiceToken: !Sub >-
+        arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}
+      KeyPairName: !Ref 'AWS::StackName'
+    DependsOn:
+      - KeyPairLambda
 
 Outputs:
   VPC:
